@@ -19,97 +19,235 @@ Input::~Input()
 	}
 }
 
-#define STRINGIFY(A) #A
+#define GLSL120(shader) "" #shader
+#define GLSL150(shader) "#version 150 \n" #shader
 
 bool Input::setup(int device_id)
 {
 	close();
 	
-	
-	string frag = STRINGIFY
-	(
-	 uniform sampler2DRect tex;
-	 uniform int use_odd;
-	 
-	 void main (void){
-		 float isodd_x = mod(gl_TexCoord[0].x, 2.0);
-		 float isodd_y = mod(gl_TexCoord[0].y, 2.0);
-		 vec2 texcoord0 = gl_TexCoord[0].xy;
-		 vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
-		 float y = 0.0;
-		 float u = 0.0;
-		 float v = 0.0;
-		 
-		 vec4 evenfield;
-		 if((bool(use_odd) && isodd_y < 1.0) || (!bool(use_odd) && isodd_y >= 1.0)){
-			 evenfield = texture2DRect(tex, vec2(texcoord0.x, texcoord0.y + 1.0));
-			 vec4 evenfield_2 = texture2DRect(tex, vec2(texcoord0.x, texcoord0.y - 1.0));
-			 y = mix(evenfield.a, evenfield_2.a, 0.5);
-			 if (isodd_x >= 1.0) {
-				 v = mix(evenfield.r, evenfield_2.r, 0.5);
-				 u = texture2DRect(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
-			 } else {
-				 u = mix(evenfield.r, evenfield_2.r, 0.5);
-				 v = texture2DRect(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
-			 }
-		 } else {
-			 evenfield = texture2DRect(tex, texcoord0);
-			 y = evenfield.a;
-			 if (isodd_x >= 1.0) {
-				 v = evenfield.r;
-				 u = texture2DRect(tex, texcoord1).r;
-			 } else {
-				 u = evenfield.r;
-				 v = texture2DRect(tex, texcoord1).r;
-			 }
-		 }
-         y = clamp(y, 0.06274509803922, 0.94117647058824);
-         u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
-         v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
-         y = 1.164 * (y - 0.06274509803922);
-         gl_FragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
-         gl_FragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
-         gl_FragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
-		 gl_FragColor.a = 1.0;
-	 }
-	 );
-	
-	string frag_prog = STRINGIFY
-	(
-	 uniform sampler2DRect tex;
-	 
-	 void main (void){
-		 float isodd_x = mod(gl_TexCoord[0].x, 2.0);
-		 vec2 texcoord0 = gl_TexCoord[0].xy;
-		 vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
-		 float y = 0.0;
-		 float u = 0.0;
-		 float v = 0.0;
-		 
-		 vec4 evenfield = texture2DRect(tex, texcoord0);
-		 y = evenfield.a;
-		 if (isodd_x >= 1.0) {
-			 v = evenfield.r;
-			 u = texture2DRect(tex, texcoord1).r;
-		 } else {
-			 u = evenfield.r;
-			 v = texture2DRect(tex, texcoord1).r;
-		 }
-         y = clamp(y, 0.06274509803922, 0.94117647058824);
-         u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
-         v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
-         y = 1.164 * (y - 0.06274509803922);
-         gl_FragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
-         gl_FragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
-         gl_FragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
-		 gl_FragColor.a = 1.0;
-	 }
-	 );
-	
+    string vert, frag, frag_prog;
+    
+    if (ofIsGLProgrammableRenderer())
+    {
+        vert = GLSL150
+        (
+         uniform mat4 projectionMatrix;
+         uniform mat4 modelViewMatrix;
+         uniform mat4 textureMatrix;
+         uniform mat4 modelViewProjectionMatrix;
+         
+         in vec4  position;
+         in vec2  texcoord;
+         in vec4  color;
+         in vec3  normal;
+         
+         out VSOUT
+         {
+             vec2 texCoord;
+         } vsout;
+         
+         void main()
+         {
+             vsout.texCoord = texcoord;
+             gl_Position = modelViewProjectionMatrix * position;
+         }
+         );
+        
+        frag = GLSL150
+        (
+         uniform sampler2DRect tex;
+         uniform int use_odd;
+         
+         in VSOUT
+         {
+             vec2 texCoord;
+         } fsin;
+         
+         out vec4 fragColor;
+         
+         void main (void){
+             float isodd_x = mod(fsin.texCoord.x, 2.0);
+             float isodd_y = mod(fsin.texCoord.y, 2.0);
+             vec2 texcoord0 = fsin.texCoord.xy;
+             vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
+             float y = 0.0;
+             float u = 0.0;
+             float v = 0.0;
+             
+             vec4 evenfield;
+             if((bool(use_odd) && isodd_y < 1.0) || (!bool(use_odd) && isodd_y >= 1.0)){
+                 evenfield = texture(tex, vec2(texcoord0.x, texcoord0.y + 1.0));
+                 vec4 evenfield_2 = texture(tex, vec2(texcoord0.x, texcoord0.y - 1.0));
+                 y = mix(evenfield.a, evenfield_2.a, 0.5);
+                 if (isodd_x >= 1.0) {
+                     v = mix(evenfield.r, evenfield_2.r, 0.5);
+                     u = texture(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
+                 } else {
+                     u = mix(evenfield.r, evenfield_2.r, 0.5);
+                     v = texture(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
+                 }
+             } else {
+                 evenfield = texture(tex, texcoord0);
+                 y = evenfield.a;
+                 if (isodd_x >= 1.0) {
+                     v = evenfield.r;
+                     u = texture(tex, texcoord1).r;
+                 } else {
+                     u = evenfield.r;
+                     v = texture(tex, texcoord1).r;
+                 }
+             }
+             y = clamp(y, 0.06274509803922, 0.94117647058824);
+             u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
+             v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
+             y = 1.164 * (y - 0.06274509803922);
+             fragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
+             fragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
+             fragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
+             fragColor.a = 1.0;
+         }
+         );
+        
+        frag_prog = GLSL150
+        (
+         uniform sampler2DRect tex;
+         
+         in VSOUT
+         {
+             vec2 texCoord;
+         } fsin;
+         
+         out vec4 fragColor;
+         
+         void main (void){
+             float isodd_x = mod(fsin.texCoord.x, 2.0);
+             vec2 texcoord0 = fsin.texCoord.xy;
+             vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
+             float y = 0.0;
+             float u = 0.0;
+             float v = 0.0;
+             
+             vec4 evenfield = texture(tex, texcoord0);
+             y = evenfield.a;
+             if (isodd_x >= 1.0) {
+                 v = evenfield.r;
+                 u = texture(tex, texcoord1).r;
+             } else {
+                 u = evenfield.r;
+                 v = texture(tex, texcoord1).r;
+             }
+             y = clamp(y, 0.06274509803922, 0.94117647058824);
+             u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
+             v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
+             y = 1.164 * (y - 0.06274509803922);
+             fragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
+             fragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
+             fragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
+             fragColor.a = 1.0;
+         }
+         );
+    }
+    else
+    {
+        vert = GLSL120
+        (
+         void main()
+         {
+             gl_TexCoord[0] = vec4(gl_MultiTexCoord0.xy, 0.0, 0.0);
+             gl_Position = ftransform();
+         }
+        );
+        
+        frag = GLSL120
+        (
+         uniform sampler2DRect tex;
+         uniform int use_odd;
+         
+         void main (void){
+             float isodd_x = mod(gl_TexCoord[0].x, 2.0);
+             float isodd_y = mod(gl_TexCoord[0].y, 2.0);
+             vec2 texcoord0 = gl_TexCoord[0].xy;
+             vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
+             float y = 0.0;
+             float u = 0.0;
+             float v = 0.0;
+             
+             vec4 evenfield;
+             if((bool(use_odd) && isodd_y < 1.0) || (!bool(use_odd) && isodd_y >= 1.0)){
+                 evenfield = texture2DRect(tex, vec2(texcoord0.x, texcoord0.y + 1.0));
+                 vec4 evenfield_2 = texture2DRect(tex, vec2(texcoord0.x, texcoord0.y - 1.0));
+                 y = mix(evenfield.a, evenfield_2.a, 0.5);
+                 if (isodd_x >= 1.0) {
+                     v = mix(evenfield.r, evenfield_2.r, 0.5);
+                     u = texture2DRect(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
+                 } else {
+                     u = mix(evenfield.r, evenfield_2.r, 0.5);
+                     v = texture2DRect(tex, vec2(texcoord1.x, texcoord1.y + 1.0)).r;
+                 }
+             } else {
+                 evenfield = texture2DRect(tex, texcoord0);
+                 y = evenfield.a;
+                 if (isodd_x >= 1.0) {
+                     v = evenfield.r;
+                     u = texture2DRect(tex, texcoord1).r;
+                 } else {
+                     u = evenfield.r;
+                     v = texture2DRect(tex, texcoord1).r;
+                 }
+             }
+             y = clamp(y, 0.06274509803922, 0.94117647058824);
+             u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
+             v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
+             y = 1.164 * (y - 0.06274509803922);
+             gl_FragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
+             gl_FragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
+             gl_FragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
+             gl_FragColor.a = 1.0;
+         }
+         );
+        
+        frag_prog = GLSL120
+        (
+         uniform sampler2DRect tex;
+         
+         void main (void){
+             float isodd_x = mod(gl_TexCoord[0].x, 2.0);
+             vec2 texcoord0 = gl_TexCoord[0].xy;
+             vec2 texcoord1 = texcoord0 + vec2(1.0, 0.0);
+             float y = 0.0;
+             float u = 0.0;
+             float v = 0.0;
+             
+             vec4 evenfield = texture2DRect(tex, texcoord0);
+             y = evenfield.a;
+             if (isodd_x >= 1.0) {
+                 v = evenfield.r;
+                 u = texture2DRect(tex, texcoord1).r;
+             } else {
+                 u = evenfield.r;
+                 v = texture2DRect(tex, texcoord1).r;
+             }
+             y = clamp(y, 0.06274509803922, 0.94117647058824);
+             u = clamp(u, 0.06274509803922, 0.92156862745098) - 0.5;
+             v = clamp(v, 0.06274509803922, 0.92156862745098) - 0.5;
+             y = 1.164 * (y - 0.06274509803922);
+             gl_FragColor.r = clamp(y + 1.793 * v, 0.0, 1.0);
+             gl_FragColor.g = clamp(y - 0.213 * u - 0.534 * v, 0.0, 1.0);
+             gl_FragColor.b = clamp(y + 2.155 * u, 0.0, 1.0);
+             gl_FragColor.a = 1.0;
+         }
+         );
+    }
+
+	shader.setupShaderFromSource(GL_VERTEX_SHADER, vert);
 	shader.setupShaderFromSource(GL_FRAGMENT_SHADER, frag);
+    shader.bindDefaults();
 	shader.linkProgram();
 
+	shader_prog.setupShaderFromSource(GL_VERTEX_SHADER, vert);
 	shader_prog.setupShaderFromSource(GL_FRAGMENT_SHADER, frag_prog);
+    shader_prog.bindDefaults();
 	shader_prog.linkProgram();
 	
 	this->device_id = device_id;

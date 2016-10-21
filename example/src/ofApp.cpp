@@ -10,7 +10,7 @@ public:
         ofSetFrameRate(60);
         
         if (input.setup(0)) {
-            input.start(bmdModeHD1080i5994);
+            input.start(bmdModeNTSC);
         }
     }
     
@@ -56,4 +56,11 @@ int main( ){
     // can be OF_WINDOW or OF_FULLSCREEN
     // pass in width and height too:
     ofRunApp(new ofApp());
+    
+//    ofGLFWWindowSettings settings;
+//    settings.width = 1280;
+//    settings.height = 720;
+//    settings.setGLVersion(3,2);
+//    ofCreateWindow(settings);
+//    ofRunApp(new ofApp());
 }
